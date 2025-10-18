@@ -50,13 +50,12 @@ function App() {
     []
   );
 
-  // ✅ Toast helper (stable with useCallback)
+  // Toast helper
   const showToast = useCallback((message, type = "info") => {
     setToast({ message, type });
     setTimeout(() => setToast({ message: "", type: "" }), 3500);
   }, []);
 
-  // ✅ ABI (memoized)
   const tokenABI = useMemo(
     () => [
       "function balanceOf(address owner) view returns (uint256)",
@@ -69,7 +68,6 @@ function App() {
     []
   );
 
-  // ✅ Network check (stable)
   const checkNetwork = useCallback(
     async (provider) => {
       try {
@@ -88,7 +86,6 @@ function App() {
     [showToast]
   );
 
-  // ✅ Load balances and cooldown
   const loadBalances = useCallback(
     async (provider, address) => {
       if (!provider || !address) return;
@@ -134,14 +131,17 @@ function App() {
     [checkNetwork, tokenABI, showToast, tokenAddress]
   );
 
-  // ✅ Connect wallet
-  const connectWallet = useCallback(async () => {
+  // Connect wallet (called by button or auto-reconnect)
+  const connectWallet = useCallback(async (addressOverride = null) => {
     try {
       if (!window.ethereum) return showToast("Please install MetaMask!", "error");
       const provider = new ethers.BrowserProvider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
-      const signer = await provider.getSigner();
-      const address = await signer.getAddress();
+      let address = addressOverride;
+      if (!address) {
+        await provider.send("eth_requestAccounts", []);
+        const signer = await provider.getSigner();
+        address = await signer.getAddress();
+      }
       if (!(await checkNetwork(provider))) return;
       setWalletAddress(address);
       await loadBalances(provider, address);
@@ -152,14 +152,13 @@ function App() {
     }
   }, [checkNetwork, loadBalances, showToast]);
 
-  // ✅ Disconnect (shows message below button)
+  // UI Disconnect (shows soft yellow info only)
   const disconnectWallet = useCallback(() => {
     setShowDisconnectInfo(true);
-
     setTimeout(() => setShowDisconnectInfo(false), 12000);
   }, []);
 
-  // ✅ Claim tokens
+  // Claim tokens
   const claimTokens = useCallback(async () => {
     try {
       if (!walletAddress) return showToast("Connect wallet first!", "error");
@@ -200,20 +199,56 @@ function App() {
     }
   }, [walletAddress, checkNetwork, tokenABI, showToast, loadBalances]);
 
-  // ✅ Listen for account change
+  // Listen for account change (MetaMask manual disconnect or switch)
   useEffect(() => {
     if (!window.ethereum) return;
+    let previousAddress = walletAddress;
+
     const handler = (accounts) => {
-      if (!accounts.length) disconnectWallet();
-      else {
+      if (!accounts.length) {
+        // MetaMask manual disconnect: clear all wallet state and info box
+        setWalletAddress("");
+        setEthBalance(null);
+        setTokenBalance(null);
+        setSymbol("");
+        setCooldownMessage("");
+        setShowDisconnectInfo(false);
+      } else {
         const provider = new ethers.BrowserProvider(window.ethereum);
         loadBalances(provider, accounts[0]);
         setWalletAddress(accounts[0]);
+        setShowDisconnectInfo(false);
+
+        // Show popup for account change only if address changed
+        if (previousAddress && previousAddress.toLowerCase() !== accounts[0].toLowerCase()) {
+          showToast(
+            `Changed to account ${accounts[0].slice(0, 6)}...${accounts[0].slice(-4)}`,
+            "success"
+          );
+        }
+        previousAddress = accounts[0];
       }
     };
     window.ethereum.on("accountsChanged", handler);
     return () => window.ethereum.removeListener("accountsChanged", handler);
-  }, [disconnectWallet, loadBalances]);
+  }, [loadBalances, showToast, walletAddress]);
+
+  // Auto-reconnect on page load if MetaMask is still connected
+  useEffect(() => {
+    async function autoReconnect() {
+      if (!window.ethereum) return;
+      try {
+        const accounts = await window.ethereum.request({ method: "eth_accounts" });
+        if (accounts && accounts.length) {
+          connectWallet(accounts[0]);
+        }
+      } catch (e) {
+        // Ignore errors, just don't connect
+      }
+    }
+    autoReconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#1e1b4b] to-[#0c0a09] text-white flex flex-col">
@@ -244,7 +279,7 @@ function App() {
             </>
           ) : (
             <button
-              onClick={connectWallet}
+              onClick={() => connectWallet()}
               className="bg-indigo-600 hover:bg-indigo-700 px-5 py-2 rounded-xl font-semibold transition-all"
             >
               Connect Wallet
@@ -320,9 +355,8 @@ function App() {
             </div>
           </>
         )}
-           {/* Toast */}
-         <Toast message={toast.message} type={toast.type} />
-
+        {/* Toast */}
+        <Toast message={toast.message} type={toast.type} />
       </main>
 
       <footer className="text-center py-4 text-sm text-gray-400 border-t border-white/10">
@@ -330,7 +364,6 @@ function App() {
         Built by <span className="text-indigo-400 font-semibold">Maga</span> 💎
       </footer>
 
-      
       <style>
         {`
           @keyframes fade-in {
