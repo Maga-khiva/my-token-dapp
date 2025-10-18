@@ -11,10 +11,16 @@ function Toast({ message, type }) {
       : type === "error"
       ? "bg-red-500"
       : "bg-yellow-500";
-
   return (
     <div
-      className={`${color} fixed bottom-6 right-6 px-5 py-3 rounded-xl text-white shadow-lg animate-fade-in`}
+      className={`
+        ${color}
+        px-5 py-3 rounded-xl text-white shadow-lg animate-fade-in
+        mx-auto
+        w-max
+        text-center
+      `}
+      style={{ minWidth: 220 }}
     >
       {message}
     </div>
@@ -30,6 +36,7 @@ function App() {
   const [cooldownMessage, setCooldownMessage] = useState("");
   const [networkError, setNetworkError] = useState("");
   const [toast, setToast] = useState({ message: "", type: "" });
+  const [showDisconnectInfo, setShowDisconnectInfo] = useState(false);
 
   const tokenAddress = "0xC5A966d1be1cF6a66a130D2D2F2c423BB565D449";
 
@@ -81,7 +88,7 @@ function App() {
     [showToast]
   );
 
-  // ✅ Load balances and cooldown (stable)
+  // ✅ Load balances and cooldown
   const loadBalances = useCallback(
     async (provider, address) => {
       if (!provider || !address) return;
@@ -145,15 +152,12 @@ function App() {
     }
   }, [checkNetwork, loadBalances, showToast]);
 
-  // ✅ Disconnect (stable)
+  // ✅ Disconnect (shows message below button)
   const disconnectWallet = useCallback(() => {
-    setWalletAddress("");
-    setEthBalance(null);
-    setTokenBalance(null);
-    setSymbol("");
-    setCooldownMessage("");
-    showToast("Wallet disconnected.", "info");
-  }, [showToast]);
+    setShowDisconnectInfo(true);
+
+    setTimeout(() => setShowDisconnectInfo(false), 12000);
+  }, []);
 
   // ✅ Claim tokens
   const claimTokens = useCallback(async () => {
@@ -196,7 +200,7 @@ function App() {
     }
   }, [walletAddress, checkNetwork, tokenABI, showToast, loadBalances]);
 
-  // ✅ Listen for account change (stable)
+  // ✅ Listen for account change
   useEffect(() => {
     if (!window.ethereum) return;
     const handler = (accounts) => {
@@ -223,14 +227,21 @@ function App() {
           {tokenInfo.description}
         </p>
         {networkError && <p className="text-red-400 text-sm mt-2">{networkError}</p>}
-        <div className="mt-3">
+        <div className="mt-3 flex flex-col items-center">
           {walletAddress ? (
-            <button
-              onClick={disconnectWallet}
-              className="bg-red-500 hover:bg-red-600 px-5 py-2 rounded-xl font-semibold transition-all"
-            >
-              Disconnect
-            </button>
+            <>
+              <button
+                onClick={disconnectWallet}
+                className="bg-red-500 hover:bg-red-600 px-5 py-2 rounded-xl font-semibold transition-all"
+              >
+                Disconnect
+              </button>
+              {showDisconnectInfo && (
+                <div className="mt-2 bg-yellow-100 text-yellow-800 p-3 rounded-lg text-sm max-w-md text-center animate-fade-in">
+                  ⚠️ To fully disconnect, open your wallet (e.g. MetaMask) → Connected Sites → Remove this website.
+                </div>
+              )}
+            </>
           ) : (
             <button
               onClick={connectWallet}
@@ -296,7 +307,9 @@ function App() {
                 onClick={claimTokens}
                 disabled={loading}
                 className={`mt-4 px-6 py-3 rounded-xl font-semibold transition-all ${
-                  loading ? "bg-gray-500 cursor-not-allowed" : "bg-green-500 hover:bg-green-600"
+                  loading
+                    ? "bg-gray-500 cursor-not-allowed"
+                    : "bg-green-500 hover:bg-green-600"
                 }`}
               >
                 {loading ? "Claiming..." : "💰 Claim Free 100 MTK"}
@@ -307,6 +320,9 @@ function App() {
             </div>
           </>
         )}
+           {/* Toast */}
+         <Toast message={toast.message} type={toast.type} />
+
       </main>
 
       <footer className="text-center py-4 text-sm text-gray-400 border-t border-white/10">
@@ -314,17 +330,15 @@ function App() {
         Built by <span className="text-indigo-400 font-semibold">Maga</span> 💎
       </footer>
 
-      {/* Toast */}
-      <Toast message={toast.message} type={toast.type} />
-
+      
       <style>
         {`
           @keyframes fade-in {
-            from { opacity: 0; transform: translateY(20px); }
+            from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
           }
           .animate-fade-in {
-            animation: fade-in 0.6s ease-in-out;
+            animation: fade-in 0.4s ease-in-out;
           }
         `}
       </style>
